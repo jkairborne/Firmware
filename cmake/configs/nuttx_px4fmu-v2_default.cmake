@@ -101,6 +101,7 @@ set(config_module_list
 	#modules/uavcan
 	modules/land_detector
 	modules/camera_feedback
+	modules/to_omv
 
 	#
 	# Estimation modules
