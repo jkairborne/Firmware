@@ -36,7 +36,10 @@
 #include <time.h>
 
 
-#define MSG_LENGTH 11
+#define MSG_LENGTH 6
+#define HEADER_LENGTH 1
+#define CONTENT_LENGTH 4
+#define CHECKSUM_LENGTH 1
 
 //#define DEBUG_PRINTF //comment this line to stop printf
 
@@ -93,14 +96,8 @@ private:
 	//Set up UART port for receiving messages
 	bool setup_port(int fd, int baud, int data_bits, int stop_bits, bool parity, bool hardware_control);
 
-	//Checksum helper function
-	uint16_t crc16_update(uint16_t crc, char a);
-	
 	//Checksum calculation
-	uint16_t calcCRC16(unsigned char *serno, int length);
-
-	//Checksum calculation
-	uint16_t checksum(unsigned char *data, int length);
+	char checksum(unsigned char *data, int length);
 
 	//Initialize UART
 	void uart_init();
@@ -350,38 +347,19 @@ bool toOmv::setup_port(int fd, int baud, int data_bits, int stop_bits, bool pari
 	return true;
 }
 
-uint16_t toOmv::crc16_update(uint16_t crc, char a)
+
+char toOmv::checksum(unsigned char *data, int length)
 {
-	int i;
-	crc ^= a;
-	for (i = 0; i < 8; ++i)
-	{
-		if ((crc & 1) != 0)
-			crc = (crc >> 1) ^ 0xA001;
-		else
-			crc = (crc >> 1);
-	}
-	return crc;
-}
-
-uint16_t toOmv::calcCRC16(unsigned char *serno, int length)
-{
-		uint16_t crc = 0;
-	uint16_t i;
-
-	unsigned char temp[31] = {0};
-	memcpy(temp, &serno[0], length);
-
-	for (i = 0; i < 31; i++)
-		crc = crc16_update(crc, temp[i]);
-
-	return crc; // must be 0
-}
-
-uint16_t toOmv::checksum(unsigned char *data, int length)
-{
-	uint16_t sum = calcCRC16(data, length);
-	return sum;
+    int sum = 0;
+    int checksum_int;
+    for (int i = 0; i < length; i++)
+    {
+        sum += data[i];
+    }
+    sum = sum & 0xFF;
+    checksum_int = 0xFF - sum;
+    char checksum_char = (char)checksum_int; 
+    return checksum_char;
 }
 
 void toOmv::uart_init()
@@ -398,8 +376,8 @@ void toOmv::poll_subscriptions()
 	if(updated)
 	{
 		orb_copy(ORB_ID(sensor_combined), sensor_combined_sub_fd, &sensor);
-		roll = int (sensor.accelerometer_m_s2[1]*10000);
-		pitch =int (sensor.accelerometer_m_s2[0]*10000); //This may not be correct way to call the updated msg?
+		roll = int (sensor.accelerometer_m_s2[1]*300);
+		pitch =int (sensor.accelerometer_m_s2[0]*300); //This may not be correct way to call the updated msg?
 		//	printf("roll, pitch float: %.2f \t\t %.2f \n", roll,pitch);	
 	//			printf("roll, pitch int: %d \t\t %d \n", ((int) roll),((int) pitch));	
 	//	printf("In callback: roll, pitch: %f \t\t %f", roll,pitch);	
@@ -441,7 +419,6 @@ void toOmv::copyArray(unsigned char *dest, int destIndex, unsigned char *source,
 	}
 }	
 
-
 void toOmv::send_rp_msg()
 {
 	write(uart,msgToSend,MSG_LENGTH);
@@ -452,23 +429,21 @@ void toOmv::createVehiclePosPacket()
 {
 	//Packet header, not using for now
 	char header[] = "X";
-	unsigned char roll_ch[4],pitch_ch[4], checkSum_char[2];
-	//getFourByteArray(roll,roll_ch);
-	//getFourByteArray(pitch,pitch_ch);
-getFourByteArray(4294967295,roll_ch);
-getFourByteArray(4294967295,pitch_ch);
-	
-	
+	unsigned char roll_ch[2],pitch_ch[2];
+	//getTwoByteArray(roll,roll_ch);
+	//getTwoByteArray(pitch,pitch_ch);
+getTwoByteArray(1000,roll_ch);
+getTwoByteArray(-1000,pitch_ch);
+		
 	msgToSend[0] = header[0];
-	copyArray(msgToSend, 1, roll_ch, 4);
-	copyArray(msgToSend, 5, pitch_ch, 4);	
+	copyArray(msgToSend, HEADER_LENGTH, roll_ch, 2);
+	copyArray(msgToSend, 3, pitch_ch, 2);	
 
-	unsigned char toCheck[8];
-	memcpy(toCheck, &msgToSend[1],8);
+	unsigned char toCheck[CONTENT_LENGTH];
+	memcpy(toCheck, &msgToSend[HEADER_LENGTH],CONTENT_LENGTH);
 
-	printf("roll, pitch, 8 byte int: %d \t %d \t %x %x %x %x \t  %x %x %x %x\n",roll,pitch, roll_ch[3],roll_ch[2],roll_ch[1],roll_ch[0], pitch_ch[3],pitch_ch[2],pitch_ch[1],pitch_ch[0]);
+//	printf("roll, pitch, 8 byte int: %d \t %d \t %x %x %x %x \t  %x %x %x %x\n",roll,pitch, roll_ch[3],roll_ch[2],roll_ch[1],roll_ch[0], pitch_ch[3],pitch_ch[2],pitch_ch[1],pitch_ch[0]);
 
-	int checkSum = checksum(toCheck, 8);
-	getFourByteArray(checkSum, checkSum_char);
-	copyArray(msgToSend, 9, checkSum_char, 2);
+	char checkSum = checksum(toCheck, CONTENT_LENGTH);
+	msgToSend[CONTENT_LENGTH+HEADER_LENGTH] = checkSum;
 }
