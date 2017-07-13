@@ -659,11 +659,11 @@ then
 		fi
 	fi
 
-	if [ "x$MAVLINK_F" == xnone ]
-	then
-	else
-		mavlink start ${MAVLINK_F}
-	fi
+#	if [ "x$MAVLINK_F" == xnone ]
+#	then
+#	else
+#		mavlink start ${MAVLINK_F}
+#	fi #THESE WERE MODIFIED TO PREVENT MAVLINK STARTING ON STARTUP
 	unset MAVLINK_F
 
 	#

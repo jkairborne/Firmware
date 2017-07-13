@@ -432,8 +432,8 @@ void toOmv::createVehiclePosPacket()
 	unsigned char roll_ch[2],pitch_ch[2];
 	//getTwoByteArray(roll,roll_ch);
 	//getTwoByteArray(pitch,pitch_ch);
-getTwoByteArray(1000,roll_ch);
-getTwoByteArray(-1000,pitch_ch);
+getTwoByteArray(200,roll_ch);
+getTwoByteArray(201,pitch_ch);
 		
 	msgToSend[0] = header[0];
 	copyArray(msgToSend, HEADER_LENGTH, roll_ch, 2);
