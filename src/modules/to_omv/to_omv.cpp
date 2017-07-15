@@ -432,8 +432,8 @@ void toOmv::createVehiclePosPacket()
 	unsigned char roll_ch[2],pitch_ch[2];
 	//getTwoByteArray(roll,roll_ch);
 	//getTwoByteArray(pitch,pitch_ch);
-getTwoByteArray(200,roll_ch);
-getTwoByteArray(201,pitch_ch);
+getTwoByteArray(30001,roll_ch);
+getTwoByteArray(-31000,pitch_ch);
 		
 	msgToSend[0] = header[0];
 	copyArray(msgToSend, HEADER_LENGTH, roll_ch, 2);
@@ -441,8 +441,6 @@ getTwoByteArray(201,pitch_ch);
 
 	unsigned char toCheck[CONTENT_LENGTH];
 	memcpy(toCheck, &msgToSend[HEADER_LENGTH],CONTENT_LENGTH);
-
-//	printf("roll, pitch, 8 byte int: %d \t %d \t %x %x %x %x \t  %x %x %x %x\n",roll,pitch, roll_ch[3],roll_ch[2],roll_ch[1],roll_ch[0], pitch_ch[3],pitch_ch[2],pitch_ch[1],pitch_ch[0]);
 
 	char checkSum = checksum(toCheck, CONTENT_LENGTH);
 	msgToSend[CONTENT_LENGTH+HEADER_LENGTH] = checkSum;
