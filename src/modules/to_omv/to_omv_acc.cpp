@@ -23,10 +23,8 @@
 #include <termios.h>
 #include <errno.h>
 
-
 #include <uORB/uORB.h>
-#include <uORB/topics/control_state.h>
-#include <lib/mathlib/mathlib.h>
+#include <uORB/topics/sensor_combined.h>	//AccZ(vibration) and angle oscillation
 
 
 #include <sys/prctl.h>
@@ -80,9 +78,9 @@ private:
 	int uart;
 
 	//Topic Subscription
-	int control_state_sub_fd;
+	int sensor_combined_sub_fd;
 
-	struct control_state_s controlState;
+	struct sensor_combined_s sensor;
 
 	//GCS - Leader Communication Network Message Lengths
 	int MSGLENGTH_COMMAND; //should be 10
@@ -126,6 +124,8 @@ private:
 
 	//Create position packet for individual vehicle
 	void createVehiclePosPacket();
+	
+	void acc_to_rp();
 };
 
 namespace to_omv {
@@ -138,10 +138,10 @@ toOmv::toOmv() :
 		_task_should_exit(false),
 		_control_task(-1),
 		uart(-1),
-        control_state_sub_fd(-1),
+        sensor_combined_sub_fd(-1),
 		MSGLENGTH_COMMAND(10)
 {
-	memset(&controlState, 0, sizeof(controlState));
+	memset(&sensor, 0, sizeof(sensor));
 }
 
 toOmv::~toOmv()
@@ -259,13 +259,14 @@ void toOmv::task_main()
 
 
 	//Subscribing Topics
-	control_state_sub_fd = orb_subscribe(ORB_ID(control_state));
+	sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
 
 	//Initialize UART Port
 	uart_init();
 
 	while (!_task_should_exit) {
 		poll_subscriptions();
+		acc_to_rp();
 		createVehiclePosPacket();
 		send_rp_msg();
 		
@@ -376,16 +377,15 @@ void toOmv::poll_subscriptions()
 {
 	bool updated;
 
-	orb_check(control_state_sub_fd, &updated);
+	orb_check(sensor_combined_sub_fd, &updated);
 	if(updated)
 	{
-		orb_copy(ORB_ID(control_state), control_state_sub_fd, &controlState);
-		math::Quaternion q_att(controlState.q[0], controlState.q[1], controlState.q[2], controlState.q[3]);
-		math::Vector<3> rpy = q_att.to_euler();
-		roll = (int) (rpy.data[0]*10000);
-		pitch = (int) (rpy.data[1]*10000);
+		orb_copy(ORB_ID(sensor_combined), sensor_combined_sub_fd, &sensor);
+		accX =sensor.accelerometer_m_s2[0];
+		accY =sensor.accelerometer_m_s2[1];
+		accZ =sensor.accelerometer_m_s2[2];
 		//	printf("roll, pitch float: %.2f \t\t %.2f \n", roll,pitch);	
-				printf("roll, pitch int: %d \t\t %d \n", (roll),(pitch));	
+	//			printf("roll, pitch int: %d \t\t %d \n", ((int) roll),((int) pitch));	
 	//	printf("In callback: roll, pitch: %f \t\t %f", roll,pitch);	
 	}
 }
@@ -430,6 +430,13 @@ void toOmv::send_rp_msg()
 	write(uart,msgToSend,MSG_LENGTH);
 	usleep(1000);
 }
+
+void toOmv::acc_to_rp()
+{
+	roll = (int) (10000*atan2(accY,accZ));
+	pitch = (int) (10000*atan2(-accX,sqrt(accY*accY+accZ*accZ)));
+}
+
 
 
 
