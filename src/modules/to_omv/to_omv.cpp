@@ -337,6 +337,36 @@ bool toOmv::setup_port(int fd, int baud, int data_bits, int stop_bits, bool pari
 				return false;
 			}
 			break;
+		case 230400:
+			if (cfsetispeed(&config, B230400) < 0 || cfsetospeed(&config, B230400) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
+
+		case 460800:
+			if (cfsetispeed(&config, B460800) < 0 || cfsetospeed(&config, B460800) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
+		case 500000:
+			if (cfsetispeed(&config, B500000) < 0 || cfsetospeed(&config, B500000) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
+
+		case 921600:
+			if (cfsetispeed(&config, B921600) < 0 || cfsetospeed(&config, B921600) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
 		default:
 			//fprintf(stderr, "ERROR: Desired baud rate %d could not be set, aborting.\n", baud);
 			return false;
@@ -369,7 +399,7 @@ char toOmv::checksum(unsigned char *data, int length)
 void toOmv::uart_init()
 {
 	uart  = open("/dev/ttyS1", O_RDWR | O_NOCTTY);		// ttyS1 = telem1 port on pixhawk
-	setup_port(uart,57600,8,1,false,false); 			//baudrate = 57600
+	setup_port(uart,921600,8,1,false,false); 			//baudrate = 921600
 }
 
 void toOmv::poll_subscriptions()
@@ -385,7 +415,7 @@ void toOmv::poll_subscriptions()
 		roll = (int) (rpy.data[0]*10000);
 		pitch = (int) (rpy.data[1]*10000);
 		//	printf("roll, pitch float: %.2f \t\t %.2f \n", roll,pitch);	
-				printf("roll, pitch int: %d \t\t %d \n", (roll),(pitch));	
+		//		printf("roll, pitch int: %d \t\t %d \n", (roll),(pitch));	
 	//	printf("In callback: roll, pitch: %f \t\t %f", roll,pitch);	
 	}
 }
