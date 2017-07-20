@@ -38,9 +38,9 @@
 #include <time.h>
 
 
-#define MSG_LENGTH 6
+#define MSG_LENGTH 8
 #define HEADER_LENGTH 1
-#define CONTENT_LENGTH 4
+#define CONTENT_LENGTH 6
 #define CHECKSUM_LENGTH 1
 
 //#define DEBUG_PRINTF //comment this line to stop printf
@@ -74,7 +74,7 @@ private:
 	
 	unsigned char msgToSend[MSG_LENGTH];
 	double accX,accY,accZ;
-	int roll, pitch;
+	int roll, pitch, yaw;
 
 	//System Variables
 	int uart;
@@ -414,6 +414,7 @@ void toOmv::poll_subscriptions()
 		math::Vector<3> rpy = q_att.to_euler();
 		roll = (int) (rpy.data[0]*10000);
 		pitch = (int) (rpy.data[1]*10000);
+		yaw = (int) (rpy.data[2]*10000);
 		//	printf("roll, pitch float: %.2f \t\t %.2f \n", roll,pitch);	
 		//		printf("roll, pitch int: %d \t\t %d \n", (roll),(pitch));	
 	//	printf("In callback: roll, pitch: %f \t\t %f", roll,pitch);	
@@ -468,15 +469,17 @@ void toOmv::createVehiclePosPacket()
 {
 	//Packet header, not using for now
 	char header[] = "X";
-	unsigned char roll_ch[2],pitch_ch[2];
+	unsigned char roll_ch[2],pitch_ch[2],yaw_ch[2];
 	getTwoByteArray(roll,roll_ch);
 	getTwoByteArray(pitch,pitch_ch);
+	getTwoByteArray(yaw,yaw_ch);
 //getTwoByteArray(30001,roll_ch);
 //getTwoByteArray(-31000,pitch_ch);
 		
 	msgToSend[0] = header[0];
 	copyArray(msgToSend, HEADER_LENGTH, roll_ch, 2);
 	copyArray(msgToSend, 3, pitch_ch, 2);	
+	copyArray(msgToSend, 5, yaw_ch, 2);	
 
 	unsigned char toCheck[CONTENT_LENGTH];
 	memcpy(toCheck, &msgToSend[HEADER_LENGTH],CONTENT_LENGTH);
