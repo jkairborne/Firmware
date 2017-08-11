@@ -26,6 +26,7 @@
 
 #include <uORB/uORB.h>
 #include <uORB/topics/control_state.h>
+#include <uORB/topics/att_pos_mocap.h>
 #include <lib/mathlib/mathlib.h>
 
 
@@ -37,7 +38,14 @@
 #include <nuttx/serial/serial.h>
 #include <time.h>
 
-
+//#include "v1.0/mavlink_types.h"
+//#include "v1.0/protocol.h"
+#include "mavlink/mavlink_main.h"
+/*#include "mavlink_bridge_header.h"
+#include "mavlink_receiver.h"
+#include "mavlink_main.h"
+#include "mavlink_command_sender.h"
+*/
 #define MSG_LENGTH 8
 #define HEADER_LENGTH 1
 #define CONTENT_LENGTH 6
@@ -124,6 +132,10 @@ private:
 	// Send the message
 	void send_rp_msg();
 
+        void ground_read(char filename[]);
+        void pub_uORB_mocap(mavlink_message_t *msg);
+    orb_advert_t _att_pos_mocap_pub;
+
 	//Create position packet for individual vehicle
 	void createVehiclePosPacket();
 };
@@ -142,6 +154,7 @@ toOmv::toOmv() :
 		MSGLENGTH_COMMAND(10)
 {
 	memset(&controlState, 0, sizeof(controlState));
+        _att_pos_mocap_pub = nullptr;
 }
 
 toOmv::~toOmv()
@@ -256,10 +269,8 @@ void toOmv::task_main()
 {
 	warnx("[Ground Comm] starting\n");
 
-
-
-	//Subscribing Topics
-	control_state_sub_fd = orb_subscribe(ORB_ID(control_state));
+        //Subscribing Topics
+        control_state_sub_fd = orb_subscribe(ORB_ID(control_state));
 
 	//Initialize UART Port
 	uart_init();
@@ -399,7 +410,7 @@ char toOmv::checksum(unsigned char *data, int length)
 void toOmv::uart_init()
 {
 	uart  = open("/dev/ttyS1", O_RDWR | O_NOCTTY);		// ttyS1 = telem1 port on pixhawk
-	setup_port(uart,921600,8,1,false,false); 			//baudrate = 921600
+	setup_port(uart,115200,8,1,false,false); 			//baudrate = 921600
 }
 
 void toOmv::poll_subscriptions()
@@ -462,7 +473,87 @@ void toOmv::send_rp_msg()
 	usleep(1000);
 }
 
+void toOmv::ground_read(char filename[])
+{
+        char firstchar[1];
+        int n = read(uart, &firstchar, 1);
+        if (n>0 && firstchar[0] == 88) //X header
+        {
+            //if (mavlink_parse_char(_mavlink->get_channel(), buf[i], &msg, &_status)) {
+            mavlink_message_t msg;// TODO - actually fill message
+            char placeholder[28];
+            read(uart,placeholder,28);
 
+            pub_uORB_mocap(&msg);
+        }
+}
+
+/*void toOmv::pub_uORB_mocap(char msg[])
+{
+
+    mavlink_att_pos_mocap_t mocap;
+    mavlink_msg_att_pos_mocap_decode(msg, &mocap);
+
+    struct att_pos_mocap_s att_pos_mocap = {};
+
+    // Use the component ID to identify the mocap system
+    att_pos_mocap.id = 138;
+
+    att_pos_mocap.timestamp = sync_stamp(mocap.time_usec);
+    att_pos_mocap.timestamp_received = hrt_absolute_time();
+
+    int dtwdth = 4;
+    att_pos_mocap.q[0] = msg[0:dtwdth-1];
+    att_pos_mocap.q[1] = msg[dtwdth:2*dtwdth-1];
+    att_pos_mocap.q[2] = msg[2*dtwdth:3*dtwdth-1];
+    att_pos_mocap.q[3] = msg[3*dtwdth:4*dtwdth-1];
+
+    att_pos_mocap.x = msg[4*dtwdth:5*dtwdth-1];
+    att_pos_mocap.y = msg[5*dtwdth:6*dtwdth-1];
+    att_pos_mocap.z = msg[6*dtwdth:7*dtwdth-1];
+
+    if (_att_pos_mocap_pub == nullptr) {
+            _att_pos_mocap_pub = orb_advertise(ORB_ID(att_pos_mocap), &att_pos_mocap);
+
+    } else {
+            orb_publish(ORB_ID(att_pos_mocap), _att_pos_mocap_pub, &att_pos_mocap);
+    //printf("received following values: quat: %.2f %.2f %.2f %.2f x,y,z: %.2f %.2f %.2f\n",double(mocap.q[0]),double(mocap.q[1]),double(mocap.q[2]),double(mocap.q[3]),double(mocap.x),double(mocap.y),double(mocap.z));
+    }
+
+} ATTEMPT1*/
+
+void toOmv::pub_uORB_mocap(mavlink_message_t *msg)
+{
+
+    mavlink_att_pos_mocap_t mocap;
+    mavlink_msg_att_pos_mocap_decode(msg, &mocap);
+
+    struct att_pos_mocap_s att_pos_mocap = {};
+
+    // Use the component ID to identify the mocap system
+    att_pos_mocap.id = msg->compid;
+
+    att_pos_mocap.timestamp = 0;// sync_stamp(mocap.time_usec);
+    att_pos_mocap.timestamp_received = hrt_absolute_time();
+
+    att_pos_mocap.q[0] = mocap.q[0];
+    att_pos_mocap.q[1] = mocap.q[1];
+    att_pos_mocap.q[2] = mocap.q[2];
+    att_pos_mocap.q[3] = mocap.q[3];
+
+    att_pos_mocap.x = mocap.x;
+    att_pos_mocap.y = mocap.y;
+    att_pos_mocap.z = mocap.z;
+
+    if (_att_pos_mocap_pub == nullptr) {
+            _att_pos_mocap_pub = orb_advertise(ORB_ID(att_pos_mocap), &att_pos_mocap);
+
+    } else {
+            orb_publish(ORB_ID(att_pos_mocap), _att_pos_mocap_pub, &att_pos_mocap);
+    printf("received following values: quat: %.2f %.2f %.2f %.2f x,y,z: %.2f %.2f %.2f\n",double(mocap.q[0]),double(mocap.q[1]),double(mocap.q[2]),double(mocap.q[3]),double(mocap.x),double(mocap.y),double(mocap.z));
+    }
+    printf("made it into this function");
+}
 
 
 void toOmv::createVehiclePosPacket()

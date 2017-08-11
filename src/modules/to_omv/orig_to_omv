@@ -23,8 +23,10 @@
 #include <termios.h>
 #include <errno.h>
 
+
 #include <uORB/uORB.h>
-#include <uORB/topics/sensor_combined.h>	//AccZ(vibration) and angle oscillation
+#include <uORB/topics/control_state.h>
+#include <lib/mathlib/mathlib.h>
 
 
 #include <sys/prctl.h>
@@ -36,9 +38,9 @@
 #include <time.h>
 
 
-#define MSG_LENGTH 6
+#define MSG_LENGTH 8
 #define HEADER_LENGTH 1
-#define CONTENT_LENGTH 4
+#define CONTENT_LENGTH 6
 #define CHECKSUM_LENGTH 1
 
 //#define DEBUG_PRINTF //comment this line to stop printf
@@ -72,15 +74,15 @@ private:
 	
 	unsigned char msgToSend[MSG_LENGTH];
 	double accX,accY,accZ;
-	int roll, pitch;
+	int roll, pitch, yaw;
 
 	//System Variables
 	int uart;
 
 	//Topic Subscription
-	int sensor_combined_sub_fd;
+	int control_state_sub_fd;
 
-	struct sensor_combined_s sensor;
+	struct control_state_s controlState;
 
 	//GCS - Leader Communication Network Message Lengths
 	int MSGLENGTH_COMMAND; //should be 10
@@ -124,8 +126,6 @@ private:
 
 	//Create position packet for individual vehicle
 	void createVehiclePosPacket();
-	
-	void acc_to_rp();
 };
 
 namespace to_omv {
@@ -138,10 +138,10 @@ toOmv::toOmv() :
 		_task_should_exit(false),
 		_control_task(-1),
 		uart(-1),
-        sensor_combined_sub_fd(-1),
+        control_state_sub_fd(-1),
 		MSGLENGTH_COMMAND(10)
 {
-	memset(&sensor, 0, sizeof(sensor));
+	memset(&controlState, 0, sizeof(controlState));
 }
 
 toOmv::~toOmv()
@@ -259,14 +259,13 @@ void toOmv::task_main()
 
 
 	//Subscribing Topics
-	sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
+	control_state_sub_fd = orb_subscribe(ORB_ID(control_state));
 
 	//Initialize UART Port
 	uart_init();
 
 	while (!_task_should_exit) {
 		poll_subscriptions();
-		acc_to_rp();
 		createVehiclePosPacket();
 		send_rp_msg();
 		
@@ -338,6 +337,36 @@ bool toOmv::setup_port(int fd, int baud, int data_bits, int stop_bits, bool pari
 				return false;
 			}
 			break;
+		case 230400:
+			if (cfsetispeed(&config, B230400) < 0 || cfsetospeed(&config, B230400) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
+
+		case 460800:
+			if (cfsetispeed(&config, B460800) < 0 || cfsetospeed(&config, B460800) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
+		case 500000:
+			if (cfsetispeed(&config, B500000) < 0 || cfsetospeed(&config, B500000) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
+
+		case 921600:
+			if (cfsetispeed(&config, B921600) < 0 || cfsetospeed(&config, B921600) < 0)
+			{
+				//fprintf(stderr, "\nERROR: Could not set desired baud rate of %d Baud\n", baud);
+				return false;
+			}
+			break;
 		default:
 			//fprintf(stderr, "ERROR: Desired baud rate %d could not be set, aborting.\n", baud);
 			return false;
@@ -370,22 +399,24 @@ char toOmv::checksum(unsigned char *data, int length)
 void toOmv::uart_init()
 {
 	uart  = open("/dev/ttyS1", O_RDWR | O_NOCTTY);		// ttyS1 = telem1 port on pixhawk
-	setup_port(uart,57600,8,1,false,false); 			//baudrate = 57600
+	setup_port(uart,115200,8,1,false,false); 			//baudrate = 921600
 }
 
 void toOmv::poll_subscriptions()
 {
 	bool updated;
 
-	orb_check(sensor_combined_sub_fd, &updated);
+	orb_check(control_state_sub_fd, &updated);
 	if(updated)
 	{
-		orb_copy(ORB_ID(sensor_combined), sensor_combined_sub_fd, &sensor);
-		accX =sensor.accelerometer_m_s2[0];
-		accY =sensor.accelerometer_m_s2[1];
-		accZ =sensor.accelerometer_m_s2[2];
+		orb_copy(ORB_ID(control_state), control_state_sub_fd, &controlState);
+		math::Quaternion q_att(controlState.q[0], controlState.q[1], controlState.q[2], controlState.q[3]);
+		math::Vector<3> rpy = q_att.to_euler();
+		roll = (int) (rpy.data[0]*10000);
+		pitch = (int) (rpy.data[1]*10000);
+		yaw = (int) (rpy.data[2]*10000);
 		//	printf("roll, pitch float: %.2f \t\t %.2f \n", roll,pitch);	
-	//			printf("roll, pitch int: %d \t\t %d \n", ((int) roll),((int) pitch));	
+		//		printf("roll, pitch int: %d \t\t %d \n", (roll),(pitch));	
 	//	printf("In callback: roll, pitch: %f \t\t %f", roll,pitch);	
 	}
 }
@@ -431,13 +462,6 @@ void toOmv::send_rp_msg()
 	usleep(1000);
 }
 
-void toOmv::acc_to_rp()
-{
-	roll = (int) (10000*atan2(accY,accZ));
-	pitch = (int) (10000*atan2(-accX,sqrt(accY*accY+accZ*accZ)));
-}
-
-
 
 
 
@@ -445,15 +469,17 @@ void toOmv::createVehiclePosPacket()
 {
 	//Packet header, not using for now
 	char header[] = "X";
-	unsigned char roll_ch[2],pitch_ch[2];
+	unsigned char roll_ch[2],pitch_ch[2],yaw_ch[2];
 	getTwoByteArray(roll,roll_ch);
 	getTwoByteArray(pitch,pitch_ch);
+	getTwoByteArray(yaw,yaw_ch);
 //getTwoByteArray(30001,roll_ch);
 //getTwoByteArray(-31000,pitch_ch);
 		
 	msgToSend[0] = header[0];
 	copyArray(msgToSend, HEADER_LENGTH, roll_ch, 2);
 	copyArray(msgToSend, 3, pitch_ch, 2);	
+	copyArray(msgToSend, 5, yaw_ch, 2);	
 
 	unsigned char toCheck[CONTENT_LENGTH];
 	memcpy(toCheck, &msgToSend[HEADER_LENGTH],CONTENT_LENGTH);

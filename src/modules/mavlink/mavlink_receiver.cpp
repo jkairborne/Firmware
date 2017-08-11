@@ -209,10 +209,12 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
 
 	case MAVLINK_MSG_ID_ATT_POS_MOCAP:
+        printf("received a ATT_MOCAP msg\n");
 		handle_message_att_pos_mocap(msg);
 		break;
 
 	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
+//        printf("received a POSITION_TARGET_LOCAL msg\n");
 		handle_message_set_position_target_local_ned(msg);
 		break;
 
@@ -842,6 +844,7 @@ MavlinkReceiver::handle_message_att_pos_mocap(mavlink_message_t *msg)
 
 	} else {
 		orb_publish(ORB_ID(att_pos_mocap), _att_pos_mocap_pub, &att_pos_mocap);
+        printf("received following values: quat: %.2f %.2f %.2f %.2f x,y,z: %.2f %.2f %.2f\n",double(mocap.q[0]),double(mocap.q[1]),double(mocap.q[2]),double(mocap.q[3]),double(mocap.x),double(mocap.y),double(mocap.z));
 	}
 }
 
